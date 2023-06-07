@@ -18,9 +18,12 @@ Supported algorithms are listed below:
 - [Hindsight Experience Replay (HER)](https://arxiv.org/abs/1707.01495)
 
 ## Usage
-Refer to the [benchmark](./benchmark) folder to reproduce the results. For each environment, a Jupyter Notebook is available to train 9 Deep Reinforcement Learning algorithms.
-1. Execute all tasks in one notebook, to benchmark 9 DRL algorithms in that specific environment. To best use computational resources, we suggest executing 3 notebooks at a time. Each notebook takes approximately the same time to execute as other notebooks.
-2. When execution is complete, multiple details are saved in the notebooks. This includes speed of training, running times for training and testing, best scores etc. Pretrained agents and logs are then saved in [benchmark/log](./benchmark/log) folder and can be monitored with Tensorboard to generate graph plots.
+Refer to the [benchmark](./benchmark) folder to reproduce the experimental results.
+
+For each environment, a Jupyter Notebook is available to train 9 Deep Reinforcement Learning algorithms. To reproduce the benchmark, go through the following steps:
+1. Create a virtual environment and install all dependencies in it from [requirements.txt](./requirements.txt).
+2. Execute all tasks in one notebook, to benchmark 9 DRL algorithms in that specific environment. To best use computational resources, we suggest executing 3 notebooks at a time. Each notebook takes approximately the same time to execute as other notebooks.
+3. When execution is complete, multiple details are saved in the notebooks. This includes speed of training, running times for training and testing, best scores etc. Pretrained agents and logs are then saved in [benchmark/log](./benchmark/log) folder and can be monitored with Tensorboard to generate graph plots.
 
 ```bash
 $ tensorboard --logdir log
