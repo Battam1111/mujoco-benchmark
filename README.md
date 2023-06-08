@@ -41,6 +41,21 @@ For each task, we have generated video demonstrations of our pretrained agents a
 
 To generate new videos, simply run the script [demonstrations/demonstrations.py](./demonstrations/demonstrations.py). This will generate new videos for all tasks in all environments in batch.
 
+### Example: Pretrained agents using REDQ
+
+| Ant                                                       | Half Cheetah                                                              | Hopper | Humanoid |
+|-----------------------------------------------------------|---------------------------------------------------------------------------|--------|----------|
+| ![REDQ_Ant-v4](./demonstrations/gifs/REDQ_Ant-v4_GIF.gif) | ![REDQ_HalfCheetah-v4](./demonstrations/gifs/REDQ_HalfCheetah-v4_GIF.gif) |![REDQ_Hopper-v4](./demonstrations/gifs/REDQ_Hopper-v4_GIF.gif)|![REDQ_Humanoid-v4](./demonstrations/gifs/REDQ_Humanoid-v4_GIF.gif)|
+
+| Humanoid Standup                                                      | Inverted Pendulum                                                                   | Inverted Double Pendulum                                                                        | Reacher                                                           |
+|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| ![REDQ_HumanoidStandup-v4](./demonstrations/gifs/REDQ_HumanoidStandup-v4_GIF.gif) | ![REDQ_InvertedPendulum-v4](./demonstrations/gifs/REDQ_InvertedPendulum-v4_GIF.gif) | ![REDQ_InvertedDoublePendulum-v4](./demonstrations/gifs/REDQ_InvertedDoublePendulum-v4_GIF.gif) | ![REDQ_Reacher-v4](./demonstrations/gifs/REDQ_Reacher-v4_GIF.gif) |
+
+| Pusher                                                          | Swimmer                                                           | Walker2d                                                            |
+|-----------------------------------------------------------------|-------------------------------------------------------------------|---------------------------------------------------------------------|
+| ![REDQ_Pusher-v4](./demonstrations/gifs/REDQ_Pusher-v4_GIF.gif) | ![REDQ_Swimmer-v4](./demonstrations/gifs/REDQ_Swimmer-v4_GIF.gif) | ![REDQ_Walker2d-v4](./demonstrations/gifs/REDQ_Walker2d-v4_GIF.gif) |
+
+
 ## Note
 
 <a name="footnote1">[1]</a>  Supported environments include HalfCheetah-v4, Hopper-v4, Swimmer-v4, Walker2d-v4, Ant-v4, Humanoid-v4, Reacher-v4, InvertedPendulum-v4, InvertedDoublePendulum-v4, Pusher-v4 and HumanoidStandup-v4.
