@@ -9,7 +9,7 @@ try:
 except ImportError:
     envpool = None
 
-
+# 渲染相关，需要注意代码修改问题
 def make_mujoco_env(task, seed, training_num, test_num, obs_norm):
     """Wrapper function for Mujoco env.
 
@@ -31,7 +31,8 @@ def make_mujoco_env(task, seed, training_num, test_num, obs_norm):
         train_envs = ShmemVectorEnv(
             [lambda: gym.make(task) for _ in range(training_num)]
         )
-        test_envs = ShmemVectorEnv([lambda: gym.make(task) for _ in range(test_num)])
+        # 渲染测试环境，因为只进行推理方法的改进
+        test_envs = ShmemVectorEnv([lambda: gym.make(task, render_mode="human") for _ in range(test_num)])
         train_envs.seed(seed)
         test_envs.seed(seed)
     if obs_norm:

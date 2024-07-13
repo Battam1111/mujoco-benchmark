@@ -10,12 +10,16 @@ import torch
 from mujoco_env import make_mujoco_env
 from torch.utils.tensorboard import SummaryWriter
 
-from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
+from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer, Batch
 from tianshou.policy import SACPolicy
 from tianshou.trainer import offpolicy_trainer
 from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
+
+from copy import deepcopy
+from typing import Any, Dict, Optional, Tuple, Union
+from tianshou.exploration import BaseNoise
 
 
 def get_args():
@@ -33,8 +37,12 @@ def get_args():
     parser.add_argument("--auto-alpha", default=False, action="store_true")
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
     parser.add_argument("--start-timesteps", type=int, default=10000)
-    parser.add_argument("--epoch", type=int, default=200)
-    parser.add_argument("--step-per-epoch", type=int, default=5000)
+    # parser.add_argument("--epoch", type=int, default=200)
+    # 测试方法是否有效
+    parser.add_argument("--epoch", type=int, default=1)
+    # parser.add_argument("--step-per-epoch", type=int, default=5000)
+    # 测试方法是否有效
+    parser.add_argument("--step-per-epoch", type=int, default=1)
     parser.add_argument("--step-per-collect", type=int, default=1)
     parser.add_argument("--update-per-step", type=int, default=1)
     parser.add_argument("--n-step", type=int, default=1)
@@ -51,7 +59,7 @@ def get_args():
     parser.add_argument(
         "--logger",
         type=str,
-        default="tensorboard",
+        default="tensorboard",  # 实际运行时使用wandb
         choices=["tensorboard", "wandb"],
     )
     parser.add_argument("--wandb-project", type=str, default="mujoco.benchmark")
@@ -63,6 +71,78 @@ def get_args():
     )
     parser.add_argument("--algo-label", type=str, default="")
     return parser.parse_args()
+
+# 基于均匀采样的策略评估类
+class SampleBasedSACPolicy(SACPolicy):
+    def __init__(
+        self,
+        actor: torch.nn.Module,
+        actor_optim: torch.optim.Optimizer,
+        critic1: torch.nn.Module,
+        critic1_optim: torch.optim.Optimizer,
+        critic2: torch.nn.Module,
+        critic2_optim: torch.optim.Optimizer,
+        tau: float = 0.005,
+        gamma: float = 0.99,
+        alpha: Union[float, Tuple[float, torch.Tensor, torch.optim.Optimizer]] = 0.2,
+        reward_normalization: bool = False,
+        estimation_step: int = 1,
+        exploration_noise: Optional[BaseNoise] = None,
+        deterministic_eval: bool = True,
+        num_samples: int = 2000,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            actor, actor_optim, critic1, critic1_optim, critic2, critic2_optim,
+            tau, gamma, alpha, reward_normalization, estimation_step,
+            exploration_noise, deterministic_eval, **kwargs
+        )
+        self.num_samples = num_samples
+
+    def forward(
+        self,
+        batch: Batch,
+        state: Optional[Union[dict, Batch, np.ndarray]] = None,
+        input: str = "obs",
+        **kwargs: Any,
+    ) -> Batch:
+        """前向传播，基于均匀采样的方法"""
+        obs = batch[input]
+        logits, hidden = self.actor(obs, state=state, info=batch.info)
+        assert isinstance(logits, tuple)
+        means, stds = logits
+        
+        # 生成均匀分布的采样点
+        samples = np.linspace(-1 + 1e-6, 1 - 1e-6, self.num_samples)  # 确保动作在 (-1 + ε, 1 - ε) 范围内
+        samples = torch.tensor(samples, device=means.device, dtype=means.dtype)
+        
+        # 调整 samples 形状以匹配 means 和 stds
+        samples = samples.view(-1, 1, 1)  # (num_samples, 1, 1)
+        means = means.view(1, *means.shape)  # (1, batch_size, action_dim)
+        stds = stds.view(1, *stds.shape)  # (1, batch_size, action_dim)
+
+        # 计算每个样本的概率
+        log_samples = torch.log((1 + samples) / (1 - samples))  # (num_samples, 1, 1)
+        probabilities = torch.exp(-0.5 * ((log_samples - means) / stds) ** 2) / (stds * np.sqrt(2 * np.pi))  # (num_samples, batch_size, action_dim)
+        probabilities = probabilities.prod(dim=-1)  # (num_samples, batch_size)
+
+        # 额外的修正因子
+        adjustment = 1 / torch.clamp(1 - samples**2, min=1e-6)  # (num_samples, 1, 1)
+        adjustment = adjustment.squeeze(-1).squeeze(-1)  # (num_samples,)
+
+        # 调整 probabilities 形状以匹配 adjustment
+        probabilities = probabilities * adjustment[:, None]  # (num_samples, batch_size)
+
+        # 找到具有最高概率的样本
+        best_sample_idx = torch.argmax(probabilities, dim=0)  # (batch_size,)
+        best_sample = samples[best_sample_idx, :, :]  # 获取最佳样本，形状为 (batch_size, 1, 1)
+
+        # 调整 best_sample 形状
+        best_sample = best_sample.squeeze(-1).squeeze(-1)  # (batch_size,)
+
+        # 返回最优动作
+        return Batch(act=best_sample)
+
 
 
 def test_sac(args=get_args()):
@@ -133,6 +213,13 @@ def test_sac(args=get_args()):
         action_space=env.action_space,
     )
 
+    # 基于采样的方法来评估最优策略
+    sample_based_policy = SampleBasedSACPolicy(
+        actor, actor_optim, critic1, critic1_optim, critic2, critic2_optim,
+        tau=args.tau, gamma=args.gamma, alpha=args.alpha, num_samples=2000,
+        deterministic_eval=False, action_space=env.action_space
+    )
+
     # 加载之前训练的策略
     if args.resume_path:
         policy.load_state_dict(torch.load(args.resume_path, map_location=args.device))
@@ -144,7 +231,8 @@ def test_sac(args=get_args()):
     else:
         buffer = ReplayBuffer(args.buffer_size)
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
-    test_collector = Collector(policy, test_envs)
+    test_collector = Collector(policy, test_envs)  # 传统方法的测试收集器
+    sample_test_collector = Collector(sample_based_policy, test_envs)  # 基于采样方法的测试收集器
     train_collector.collect(n_step=args.start_timesteps, random=True)
 
     # 日志设置
@@ -192,12 +280,20 @@ def test_sac(args=get_args()):
         )
         pprint.pprint(result)
 
-    # 观看策略表现
+    # 观看传统方法策略表现
+    print("Testing traditional method...")
     policy.eval()
     test_envs.seed(args.seed)
     test_collector.reset()
     result = test_collector.collect(n_episode=args.test_num, render=args.render)
-    print(f'Final reward: {result["rews"].mean()}, length: {result["lens"].mean()}')
+    print(f'Traditional method - Final reward: {result["rews"].mean()}, length: {result["lens"].mean()}')
+
+    # 观看基于采样方法策略表现
+    print("Testing sample-based method...")
+    sample_based_policy.actor.eval()
+    sample_test_collector.reset()
+    result = sample_test_collector.collect(n_episode=args.test_num, render=args.render)
+    print(f'Sample-based method - Final reward: {result["rews"].mean()}, length: {result["lens"].mean()}')
 
 
 if __name__ == "__main__":

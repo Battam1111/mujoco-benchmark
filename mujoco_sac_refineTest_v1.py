@@ -17,51 +17,116 @@ from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
 
+# Supported environments include HalfCheetah-v4, Hopper-v4, Swimmer-v4, Walker2d-v4, 
+# Ant-v4, Humanoid-v4, Reacher-v4, InvertedPendulum-v4, InvertedDoublePendulum-v4, 
+# Pusher-v4 and HumanoidStandup-v4.
 
 def get_args():
     # 获取命令行参数
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="Ant-v4")
+    
+    # 指定任务环境，例如 Ant-v4
+    parser.add_argument("--task", type=str, default="Humanoid-v4")
+    
+    # 随机种子，用于结果重现
     parser.add_argument("--seed", type=int, default=0)
+    
+    # 经验回放缓冲区的大小
     parser.add_argument("--buffer-size", type=int, default=1000000)
+    
+    # 隐藏层的大小（神经网络结构），默认为两层，每层256个神经元
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[256, 256])
+    
+    # Actor网络的学习率
     parser.add_argument("--actor-lr", type=float, default=1e-3)
+    
+    # Critic网络的学习率
     parser.add_argument("--critic-lr", type=float, default=1e-3)
+    
+    # 折扣因子γ，用于奖励计算
     parser.add_argument("--gamma", type=float, default=0.99)
+    
+    # 软更新系数τ
     parser.add_argument("--tau", type=float, default=0.005)
+    
+    # SAC算法中的温度参数α
     parser.add_argument("--alpha", type=float, default=0.2)
-    parser.add_argument("--auto-alpha", default=False, action="store_true")
+    
+    # 是否自动调整α,默认不开启
+    parser.add_argument("--auto-alpha", default=True, action="store_true")
+    
+    # α的学习率
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
+    
+    # 初始探索的时间步数
     parser.add_argument("--start-timesteps", type=int, default=10000)
-    parser.add_argument("--epoch", type=int, default=200)
-    parser.add_argument("--step-per-epoch", type=int, default=5000)
+    
+    # 训练的轮数，默认200
+    parser.add_argument("--epoch", type=int, default=1000)
+    
+    # 每轮中的时间步数，默认5000
+    parser.add_argument("--step-per-epoch", type=int, default=1000)
+    
+    # 每次收集的时间步数
     parser.add_argument("--step-per-collect", type=int, default=1)
+    
+    # 每步更新的次数
     parser.add_argument("--update-per-step", type=int, default=1)
+    
+    # N步回报
     parser.add_argument("--n-step", type=int, default=1)
+    
+    # 批量大小
     parser.add_argument("--batch-size", type=int, default=256)
+    
+    # 训练过程中使用的环境数量
     parser.add_argument("--training-num", type=int, default=1)
+    
+    # 测试过程中使用的环境数量，默认是10
     parser.add_argument("--test-num", type=int, default=10)
+    
+    # 日志保存路径
     parser.add_argument("--logdir", type=str, default="log")
+    
+    # 渲染间隔
     parser.add_argument("--render", type=float, default=0.)
+    
+    # 设备类型（CPU或GPU）
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
+    
+    # 恢复训练的模型路径
     parser.add_argument("--resume-path", type=str, default=None)
+    
+    # 恢复训练的ID
     parser.add_argument("--resume-id", type=str, default=None)
+    
+    # 日志记录器类型
     parser.add_argument(
         "--logger",
         type=str,
-        default="tensorboard",
+        # wandb更方便
+        default="wandb",
         choices=["tensorboard", "wandb"],
     )
+    
+    # WandB项目名称
     parser.add_argument("--wandb-project", type=str, default="mujoco.benchmark")
-    parser.add_argument(
-        "--watch",
-        default=False,
-        action="store_true",
-        help="watch the play of pre-trained policy only",
-    )
+    
+    # 仅观察预训练策略的表现
+    parser.add_argument("--watch", default=False, action="store_true", help="watch the play of pre-trained policy only")
+    
+    # 算法标签
     parser.add_argument("--algo-label", type=str, default="")
+    
+    # 使用均匀采样
+    parser.add_argument("--use-uniform-sampling", default=True, action="store_true")
+    
+    # 运行数（跑了多少不同种子的实验）
+    parser.add_argument("--num-runs", type=int, default=1, help="Number of runs with different seeds")
+    
+    
     return parser.parse_args()
 
 
@@ -143,8 +208,8 @@ def test_sac(args=get_args()):
         buffer = VectorReplayBuffer(args.buffer_size, len(train_envs))
     else:
         buffer = ReplayBuffer(args.buffer_size)
-    train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
-    test_collector = Collector(policy, test_envs)
+    train_collector = Collector(policy, train_envs, buffer, exploration_noise=True, seed=args.seed)
+    test_collector = Collector(policy, test_envs, task=args.task, seed=args.seed)
     train_collector.collect(n_step=args.start_timesteps, random=True)
 
     # 日志设置
@@ -188,17 +253,61 @@ def test_sac(args=get_args()):
             save_best_fn=save_best_fn,
             logger=logger,
             update_per_step=args.update_per_step,
+            # 检测是否继续进行训练的一个参数
             test_in_train=False,
+            # 是否打印结果
+            verbose=False,
         )
         pprint.pprint(result)
 
-    # 观看策略表现
+
+    # 查看训练结束时的最终表现（test环境下）
+    # 观看策略表现（确定性动作）
+    policy.eval_method = 'deterministic'
     policy.eval()
     test_envs.seed(args.seed)
     test_collector.reset()
-    result = test_collector.collect(n_episode=args.test_num, render=args.render)
-    print(f'Final reward: {result["rews"].mean()}, length: {result["lens"].mean()}')
+    result_deterministic = test_collector.collect(n_episode=args.test_num, render=args.render)
+    print(f'Final reward (deterministic): {result_deterministic["rews"].mean()}, length: {result_deterministic["lens"].mean()}')
 
+    # 观看策略表现（均匀采样_v1）
+    policy.eval_method = 'uniform_v1'
+    policy.eval()
+    test_envs.seed(args.seed)
+    test_collector.reset()
+    result_uniform_v1 = test_collector.collect(n_episode=args.test_num, render=args.render)
+    print(f'Final reward (uniform_v1): {result_uniform_v1["rews"].mean()}, length: {result_uniform_v1["lens"].mean()}')
+    
+    # 观看策略表现（均匀采样_v2）
+    policy.eval_method = 'uniform_v2'
+    policy.eval()
+    test_envs.seed(args.seed)
+    test_collector.reset()
+    result_uniform_v2 = test_collector.collect(n_episode=args.test_num, render=args.render)
+    print(f'Final reward (uniform_v2): {result_uniform_v2["rews"].mean()}, length: {result_uniform_v2["lens"].mean()}')
 
 if __name__ == "__main__":
-    test_sac()
+    args = get_args()
+    # 随机跑五个种子
+    args.num_runs = 5
+    seeds = [0, 1, 2, 3, 4]
+    tasks = ["HalfCheetah-v4", "Hopper-v4", "Swimmer-v4", "Walker2d-v4", 
+             "Ant-v4", "Humanoid-v4", "Reacher-v4", 
+             "InvertedPendulum-v4", "InvertedDoublePendulum-v4", 
+             "Pusher-v4", "HumanoidStandup-v4"]
+    
+    # 可选，将所有任务跑一遍
+    # for task in tasks:
+    #     args.task = task
+        
+    #     for seed in seeds:
+    #         args.seed = seed
+    #         test_sac(args)
+
+    # 指定某个任务进行实验
+    args.task = 'Humanoid-v4'
+    # 指定是否自动调alpha
+    args.auto_alpha = False
+    for seed in seeds:
+        args.seed = seed
+        test_sac(args)
