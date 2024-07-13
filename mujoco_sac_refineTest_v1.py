@@ -278,13 +278,13 @@ def test_sac(args=get_args()):
     result_uniform_v1 = test_collector.collect(n_episode=args.test_num, render=args.render)
     print(f'Final reward (uniform_v1): {result_uniform_v1["rews"].mean()}, length: {result_uniform_v1["lens"].mean()}')
     
-    # 观看策略表现（均匀采样_v2）
-    policy.eval_method = 'uniform_v2'
-    policy.eval()
-    test_envs.seed(args.seed)
-    test_collector.reset()
-    result_uniform_v2 = test_collector.collect(n_episode=args.test_num, render=args.render)
-    print(f'Final reward (uniform_v2): {result_uniform_v2["rews"].mean()}, length: {result_uniform_v2["lens"].mean()}')
+    # # 观看策略表现（均匀采样_v2）
+    # policy.eval_method = 'uniform_v2'
+    # policy.eval()
+    # test_envs.seed(args.seed)
+    # test_collector.reset()
+    # result_uniform_v2 = test_collector.collect(n_episode=args.test_num, render=args.render)
+    # print(f'Final reward (uniform_v2): {result_uniform_v2["rews"].mean()}, length: {result_uniform_v2["lens"].mean()}')
 
 if __name__ == "__main__":
     args = get_args()
